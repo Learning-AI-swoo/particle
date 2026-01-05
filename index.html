@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VUIM 2026 3D Cylinder Particle System</title>
+<title>VUIM 2026 Text Particle System</title>
 <style>
 body {
 margin: 0;
@@ -50,16 +50,46 @@ const overlay = document.getElementById('overlay');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Particle system
+// Text to particle converter
+function textToParticles(text, fontSize, spacing) {
+const tempCanvas = document.createElement('canvas');
+const tempCtx = tempCanvas.getContext('2d');
+tempCanvas.width = 800;
+tempCanvas.height = 200;
+tempCtx.font = `bold ${fontSize}px Arial`;
+tempCtx.fillStyle = 'white';
+tempCtx.textAlign = 'center';
+tempCtx.textBaseline = 'middle';
+tempCtx.fillText(text, tempCanvas.width / 2, tempCanvas.height / 2);
+
+const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+const particles = [];
+
+for (let y = 0; y < tempCanvas.height; y += spacing) {
+for (let x = 0; x < tempCanvas.width; x += spacing) {
+const index = (y * tempCanvas.width + x) * 4;
+if (imageData.data[index + 3] > 128) {
+particles.push({
+x: x - tempCanvas.width / 2,
+y: y - tempCanvas.height / 2,
+z: 0
+});
+}
+}
+}
+
+return particles;
+}
+
+// Particle class
 class Particle {
-constructor(x, y, z, text, index, total) {
+constructor(x, y, z, index, total) {
 this.baseX = x;
 this.baseY = y;
 this.baseZ = z;
 this.x = x;
 this.y = y;
 this.z = z;
-this.text = text;
 this.index = index;
 this.total = total;
 this.vx = 0;
@@ -68,6 +98,7 @@ this.vz = 0;
 this.exploded = false;
 this.returnSpeed = 0.05;
 this.waveOffset = (index / total) * Math.PI * 2;
+this.hue = (index / total) * 360;
 }
 
 update(time, explosionActive, mouseInfluence) {
@@ -104,8 +135,11 @@ this.z = this.baseZ;
 }
 
 // Wave motion
-const wave = Math.sin(time * 0.002 + this.waveOffset) * 20;
-this.y = this.exploded ? this.y : this.baseY + wave + mouseInfluence.tilt;
+const wave = Math.sin(time * 0.002 + this.waveOffset) * 15;
+if (!this.exploded) {
+this.z = this.baseZ + wave;
+this.y = this.baseY + mouseInfluence.tilt;
+}
 }
 
 draw(rotX, rotY, scale, centerX, centerY) {
@@ -130,28 +164,25 @@ tempZ = y * sinX + z * cosX;
 y = tempY;
 z = tempZ;
 
-// Scale & perspective
+// Perspective
 const perspective = 800;
 const scaleZ = perspective / (perspective + z);
 const screenX = centerX + x * scale * scaleZ;
 const screenY = centerY + y * scale * scaleZ;
 const size = 2 + scaleZ * 2;
 
-// Color based on depth
-const brightness = Math.floor(155 + z * 0.2);
-const alpha = scaleZ * 0.8;
-
-ctx.fillStyle = `rgba(0, ${brightness}, 255, ${alpha})`;
+// Rainbow color
+const alpha = scaleZ * 0.9;
+ctx.fillStyle = `hsla(${this.hue}, 80%, 60%, ${alpha})`;
 ctx.beginPath();
 ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
 ctx.fill();
 
-// Text overlay
-if (this.index % 8 === 0 && scaleZ > 0.6) {
-ctx.fillStyle = `rgba(0, 255, 136, ${alpha * 0.6})`;
-ctx.font = `${10 * scaleZ}px Courier New`;
-ctx.fillText(this.text, screenX + 5, screenY);
-}
+// Glow effect
+ctx.fillStyle = `hsla(${this.hue}, 100%, 70%, ${alpha * 0.3})`;
+ctx.beginPath();
+ctx.arc(screenX, screenY, size * 2, 0, Math.PI * 2);
+ctx.fill();
 
 return { screenX, screenY, scaleZ, size };
 }
@@ -163,7 +194,7 @@ constructor(radius, speed, offset) {
 this.radius = radius;
 this.speed = speed;
 this.angle = offset;
-this.orbitY = (Math.random() - 0.5) * 200;
+this.orbitY = (Math.random() - 0.5) * 300;
 }
 
 update() {
@@ -204,29 +235,16 @@ return { screenX, screenY, scaleZ };
 }
 }
 
-// Generate cylinder particles
-const particles = [];
-const text = "VUIM 2026";
-const radius = 150;
-const height = 300;
-const rings = 30;
-const particlesPerRing = 24;
-
-for (let i = 0; i < rings; i++) {
-const y = -height / 2 + (height / rings) * i;
-for (let j = 0; j < particlesPerRing; j++) {
-const angle = (j / particlesPerRing) * Math.PI * 2;
-const x = Math.cos(angle) * radius;
-const z = Math.sin(angle) * radius;
-const char = text[particles.length % text.length];
-particles.push(new Particle(x, y, z, char, particles.length, rings * particlesPerRing));
-}
-}
+// Generate text particles
+const textPositions = textToParticles("VUIM 2026", 120, 3);
+const particles = textPositions.map((pos, i) => 
+new Particle(pos.x, pos.y, pos.z, i, textPositions.length)
+);
 
 // Satellites
 const satellites = [];
 for (let i = 0; i < 5; i++) {
-satellites.push(new Satellite(250 + i * 30, 0.01 + i * 0.005, (i / 5) * Math.PI * 2));
+satellites.push(new Satellite(350 + i * 40, 0.01 + i * 0.005, (i / 5) * Math.PI * 2));
 }
 
 // Animation state
@@ -247,7 +265,7 @@ mouseX = e.clientX;
 mouseY = e.clientY;
 targetRotY = (mouseX / canvas.width - 0.5) * Math.PI;
 targetRotX = (mouseY / canvas.height - 0.5) * Math.PI * 0.5 + 0.3;
-targetScale = 1.2;
+targetScale = 1.3;
 });
 
 canvas.addEventListener('mouseleave', () => {
@@ -264,7 +282,7 @@ explosionTimer = Date.now();
 // Animation loop
 function animate() {
 const time = Date.now();
-ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 // Smooth rotation & scale
@@ -285,7 +303,7 @@ const mouseInfluence = {
 tilt: (mouseY / canvas.height - 0.5) * 30
 };
 
-// Update & draw particles
+// Update particles
 particles.forEach(p => p.update(time, explosionActive, mouseInfluence));
 
 // Sort by depth
@@ -295,14 +313,14 @@ screen: p.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2)
 })).sort((a, b) => a.screen.scaleZ - b.screen.scaleZ);
 
 // Draw connections
-ctx.strokeStyle = 'rgba(0, 255, 136, 0.1)';
-ctx.lineWidth = 1;
-for (let i = 0; i < rendered.length; i++) {
-for (let j = i + 1; j < Math.min(i + 3, rendered.length); j++) {
+ctx.strokeStyle = 'rgba(0, 255, 136, 0.08)';
+ctx.lineWidth = 0.5;
+for (let i = 0; i < rendered.length; i += 5) {
+for (let j = i + 1; j < Math.min(i + 4, rendered.length); j++) {
 const a = rendered[i].screen;
 const b = rendered[j].screen;
 const dist = Math.hypot(a.screenX - b.screenX, a.screenY - b.screenY);
-if (dist < 80) {
+if (dist < 50) {
 ctx.beginPath();
 ctx.moveTo(a.screenX, a.screenY);
 ctx.lineTo(b.screenX, b.screenY);
