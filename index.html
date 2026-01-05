@@ -1,360 +1,314 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VUIM 2026 Text Particle System</title>
-<style>
-body {
-margin: 0;
-overflow: hidden;
-background: #0a0a0f;
-font-family: 'Courier New', monospace;
-}
-canvas {
-display: block;
-cursor: pointer;
-}
-#overlay {
-position: absolute;
-top: 20px;
-left: 20px;
-color: #00ff88;
-font-size: 11px;
-pointer-events: none;
-text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-line-height: 1.6;
-}
-#instructions {
-position: absolute;
-bottom: 20px;
-left: 50%;
-transform: translateX(-50%);
-color: #00ff88;
-font-size: 12px;
-text-align: center;
-opacity: 0.7;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VUIM 2026 Sci-Fi Particle Cylinder V2 (Readable)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        canvas {
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffcc;
+            pointer-events: none;
+            text-transform: uppercase;
+            font-size: 12px;
+            line-height: 1.5;
+            text-shadow: 0 0 5px #00ffcc;
+            z-index: 10;
+        }
+    </style>
 </head>
 <body>
+
+<div id="ui-layer">
+    <div>SYSTEM: VUIM_CORE_2026_V2</div>
+    <div>STATUS: READABILITY_ENHANCED</div>
+    <div id="coords">COORDS: X:0 Y:0 Z:0</div>
+    <div>PARTICLES: <span id="p-count">0</span></div>
+</div>
 <canvas id="canvas"></canvas>
-<div id="overlay"></div>
-<div id="instructions">HOVER: Expand & Tilt | CLICK: Explode | Mouse to Rotate</div>
 
 <script>
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const overlay = document.getElementById('overlay');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const uiCoords = document.getElementById('coords');
+    const uiCount = document.getElementById('p-count');
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+    let width, height;
+    let particles = [];
+    let satellites = [];
+    
+    const config = {
+        text: "VUIM 2026            ",  // 공백을 더 많이 
+        fontSize: 80, // 18 → 80으로 대폭 증가
+        lineHeightRatio: 1.4,
+        rows: 5, // 12 → 8로 줄임 --> 5로 줄임 
+        radius: 200,
+        particleSize: 1.8,
+        explodeForce: 800,
+        returnSpeed: 0.08,
+        perspective: 800,
+        connectionDist: 40
+    };
 
-// Text to particle converter
-function textToParticles(text, fontSize, spacing) {
-const tempCanvas = document.createElement('canvas');
-const tempCtx = tempCanvas.getContext('2d');
-tempCanvas.width = 800;
-tempCanvas.height = 200;
-tempCtx.font = 'bold ' + fontSize + 'px Arial';
-tempCtx.fillStyle = 'white';
-tempCtx.textAlign = 'center';
-tempCtx.textBaseline = 'middle';
-tempCtx.fillText(text, tempCanvas.width / 2, tempCanvas.height / 2);
+    let mouse = { x: 0, y: 0, isActive: false };
+    let isExploded = false;
+    let rotationAngle = 0;
 
-const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-const particles = [];
+    function resize() {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
 
-for (let y = 0; y < tempCanvas.height; y += spacing) {
-for (let x = 0; x < tempCanvas.width; x += spacing) {
-const index = (y * tempCanvas.width + x) * 4;
-if (imageData.data[index + 3] > 128) {
-particles.push({
-x: x - tempCanvas.width / 2,
-y: y - tempCanvas.height / 2,
-z: 0
-});
-}
-}
-}
+    window.addEventListener('mousemove', e => {
+        mouse.x = e.clientX - width / 2;
+        mouse.y = e.clientY - height / 2;
+        mouse.isActive = true;
+    });
 
-return particles;
-}
+    window.addEventListener('mousedown', () => {
+        isExploded = !isExploded;
+        explodeParticles();
+    });
 
-// Particle class
-class Particle {
-constructor(x, y, z, index, total) {
-this.baseX = x;
-this.baseY = y;
-this.baseZ = z;
-this.x = x;
-this.y = y;
-this.z = z;
-this.index = index;
-this.total = total;
-this.vx = 0;
-this.vy = 0;
-this.vz = 0;
-this.exploded = false;
-this.returnSpeed = 0.05;
-this.waveOffset = (index / total) * Math.PI * 2;
-this.hue = (index / total) * 360;
-}
+    function initParticles() {
+        particles = [];
+        satellites = [];
 
-update(time, explosionActive, mouseInfluence) {
-if (explosionActive && !this.exploded) {
-this.vx = (Math.random() - 0.5) * 15;
-this.vy = (Math.random() - 0.5) * 15;
-this.vz = (Math.random() - 0.5) * 15;
-this.exploded = true;
-}
+        const tmpCanvas = document.createElement('canvas');
+        const tmpCtx = tmpCanvas.getContext('2d');
+        
+        const circumference = 2 * Math.PI * config.radius;
+        tmpCanvas.width = circumference; 
+        const lineHeight = config.fontSize * config.lineHeightRatio;
+        tmpCanvas.height = lineHeight * config.rows;
 
-if (this.exploded) {
-this.x += this.vx;
-this.y += this.vy;
-this.z += this.vz;
-this.vx *= 0.98;
-this.vy *= 0.98;
-this.vz *= 0.98;
+        tmpCtx.font = 'bold ' + config.fontSize + 'px Arial';
+        tmpCtx.fillStyle = '#ffffff';
+        tmpCtx.textBaseline = 'middle';
+        tmpCtx.textAlign = 'left';
 
-if (!explosionActive) {
-const dx = this.baseX - this.x;
-const dy = this.baseY - this.y;
-const dz = this.baseZ - this.z;
-this.x += dx * this.returnSpeed;
-this.y += dy * this.returnSpeed;
-this.z += dz * this.returnSpeed;
+        const textWidth = tmpCtx.measureText(config.text).width;
+        const repeatCount = Math.ceil(circumference / textWidth) + 1;
+        
+        for (let y = 0; y < config.rows; y++) {
+            const startX = 0; 
+            const yPos = y * lineHeight + lineHeight / 2;
+            
+            for (let x = 0; x < repeatCount; x++) {
+                tmpCtx.fillText(config.text, startX + x * textWidth, yPos);
+            }
+        }
 
-if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(dz) < 0.5) {
-this.exploded = false;
-this.x = this.baseX;
-this.y = this.baseY;
-this.z = this.baseZ;
-}
-}
-}
+        const imageData = tmpCtx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height);
+        const buffer32 = new Uint32Array(imageData.data.buffer);
 
-// Wave motion
-const wave = Math.sin(time * 0.002 + this.waveOffset) * 15;
-if (!this.exploded) {
-this.z = this.baseZ + wave;
-this.y = this.baseY + mouseInfluence.tilt;
-}
-}
+        const step = 3; // 4 → 2로 줄여서 파티클 밀도 2배 증가  --> 3 으로 좀 줄임 
 
-draw(rotX, rotY, scale, centerX, centerY) {
-const cosX = Math.cos(rotX);
-const sinX = Math.sin(rotX);
-const cosY = Math.cos(rotY);
-const sinY = Math.sin(rotY);
+        for (let y = 0; y < tmpCanvas.height; y += step) {
+            for (let x = 0; x < tmpCanvas.width; x += step) {
+                if (buffer32[y * tmpCanvas.width + x] & 0xff000000) {
+                    
+                    const angle = (x / tmpCanvas.width) * Math.PI * 2;
+                    const cylinderH = y - tmpCanvas.height / 2;
+                    
+                    const bx = Math.cos(angle) * config.radius;
+                    const bz = Math.sin(angle) * config.radius;
+                    const by = cylinderH;
 
-let x = this.x;
-let y = this.y;
-let z = this.z;
+                    const hue = (x / tmpCanvas.width * 720) + (y * 1.5);
+                    const color = 'hsl(' + (hue % 360) + ', 100%, 60%)';
 
-// Rotate Y
-let tempX = x * cosY - z * sinY;
-let tempZ = x * sinY + z * cosY;
-x = tempX;
-z = tempZ;
+                    particles.push(new Particle(bx, by, bz, color, angle, cylinderH));
+                }
+            }
+        }
 
-// Rotate X
-let tempY = y * cosX - z * sinX;
-tempZ = y * sinX + z * cosX;
-y = tempY;
-z = tempZ;
+        for(let i=0; i<40; i++) {
+            satellites.push(new Satellite());
+        }
 
-// Perspective
-const perspective = 800;
-const scaleZ = perspective / (perspective + z);
-const screenX = centerX + x * scale * scaleZ;
-const screenY = centerY + y * scale * scaleZ;
-const size = 2 + scaleZ * 2;
+        uiCount.innerText = particles.length;
+    }
 
-// Pastel rainbow color
-const alpha = scaleZ * 0.9;
-const lightness = 75;
-ctx.fillStyle = 'hsla(' + this.hue + ', 70%, ' + lightness + '%, ' + alpha + ')';
-ctx.beginPath();
-ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
-ctx.fill();
+    class Particle {
+        constructor(x, y, z, color, angle, h) {
+            this.baseX = x; this.baseY = y; this.baseZ = z;
+            this.baseAngle = angle; this.baseH = h;
+            this.x = (Math.random() - 0.5) * 2000; 
+            this.y = (Math.random() - 0.5) * 2000;
+            this.z = (Math.random() - 0.5) * 2000;
+            this.vx = 0; this.vy = 0; this.vz = 0;
+            this.color = color;
+            this.size = Math.random() * config.particleSize + 0.8;
+            this.sx = 0; this.sy = 0;
+        }
 
-// Glow effect
-ctx.fillStyle = 'hsla(' + this.hue + ', 85%, ' + (lightness + 5) + '%, ' + (alpha * 0.25) + ')';
-ctx.beginPath();
-ctx.arc(screenX, screenY, size * 2, 0, Math.PI * 2);
-ctx.fill();
+        update(time) {
+            const wave = Math.sin(time * 2.5 + this.baseH * 0.08) * 8; 
+            const currentAngle = this.baseAngle + rotationAngle;
+            
+            let expansion = 0;
+            let tiltX = 0;
 
-return { screenX: screenX, screenY: screenY, scaleZ: scaleZ, size: size };
-}
-}
+            if (!isExploded && mouse.isActive) {
+                const dist = Math.sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
+                expansion = Math.max(0, (250 - dist) * 0.15);
+                tiltX = mouse.y * 0.0015 * this.baseH;
+            }
 
-// Satellite particle
-class Satellite {
-constructor(radius, speed, offset) {
-this.radius = radius;
-this.speed = speed;
-this.angle = offset;
-this.orbitY = (Math.random() - 0.5) * 300;
-}
+            const r = config.radius + expansion;
+            const targetX = Math.cos(currentAngle) * r;
+            const targetZ = Math.sin(currentAngle) * r;
+            const targetY = this.baseH + wave + tiltX;
 
-update() {
-this.angle += this.speed;
-}
+            if (isExploded) {
+                this.x += this.vx; this.y += this.vy; this.z += this.vz;
+                this.vx *= 0.98; this.vy *= 0.98; this.vz *= 0.98;
+            } else {
+                this.x += (targetX - this.x) * config.returnSpeed;
+                this.y += (targetY - this.y) * config.returnSpeed;
+                this.z += (targetZ - this.z) * config.returnSpeed;
+            }
 
-draw(rotX, rotY, scale, centerX, centerY) {
-let x = Math.cos(this.angle) * this.radius;
-let y = this.orbitY;
-let z = Math.sin(this.angle) * this.radius;
+            const scale = config.perspective / (config.perspective + this.z + 350);
+            this.sx = this.x * scale + width / 2;
+            this.sy = this.y * scale + height / 2;
+            this.scale = scale;
 
-const cosX = Math.cos(rotX);
-const sinX = Math.sin(rotX);
-const cosY = Math.cos(rotY);
-const sinY = Math.sin(rotY);
+            return scale > 0;
+        }
 
-let tempX = x * cosY - z * sinY;
-let tempZ = x * sinY + z * cosY;
-x = tempX;
-z = tempZ;
+        draw(ctx) {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.sx, this.sy, this.size * this.scale, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
 
-let tempY = y * cosX - z * sinX;
-tempZ = y * sinX + z * cosX;
-y = tempY;
-z = tempZ;
+    class Satellite {
+        constructor() {
+            this.angle = Math.random() * Math.PI * 2;
+            this.radius = config.radius * (1.8 + Math.random() * 0.5);
+            this.y = (Math.random() - 0.5) * 600;
+            this.speed = (Math.random() - 0.5) * 0.015;
+            this.size = Math.random() * 2 + 1.5;
+        }
 
-const perspective = 800;
-const scaleZ = perspective / (perspective + z);
-const screenX = centerX + x * scale * scaleZ;
-const screenY = centerY + y * scale * scaleZ;
+        updateAndDraw(ctx) {
+            if(isExploded) return;
+            this.angle += this.speed;
+            const x = Math.cos(this.angle) * this.radius;
+            const z = Math.sin(this.angle) * this.radius;
+            const finalX = x * Math.cos(rotationAngle * 0.3) - z * Math.sin(rotationAngle * 0.3);
+            const finalZ = x * Math.sin(rotationAngle * 0.3) + z * Math.cos(rotationAngle * 0.3);
+            const scale = config.perspective / (config.perspective + finalZ + 350);
+            const sx = finalX * scale + width / 2;
+            const sy = this.y * scale + height / 2;
 
-ctx.fillStyle = 'rgba(255, 180, 120, ' + (scaleZ * 0.6) + ')';
-ctx.beginPath();
-ctx.arc(screenX, screenY, 3 * scaleZ, 0, Math.PI * 2);
-ctx.fill();
+            if (scale > 0) {
+                ctx.fillStyle = '#ffffff';
+                ctx.globalAlpha = 0.8;
+                ctx.beginPath();
+                ctx.arc(sx, sy, this.size * scale, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
 
-return { screenX: screenX, screenY: screenY, scaleZ: scaleZ };
-}
-}
+    function explodeParticles() {
+        particles.forEach(function(p) {
+            if (isExploded) {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const force = Math.random() * 25 + 10;
+                p.vx = Math.sin(phi) * Math.cos(theta) * force;
+                p.vy = Math.cos(phi) * force;
+                p.vz = Math.sin(phi) * Math.sin(theta) * force;
+            } else {
+                p.vx = 0; p.vy = 0; p.vz = 0;
+            }
+        });
+    }
 
-// Generate text particles
-const textPositions = textToParticles("VUIM 2026", 120, 3);
-const particles = textPositions.map(function(pos, i) {
-return new Particle(pos.x, pos.y, pos.z, i, textPositions.length);
-});
+    let time = 0;
+    function animate() {
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.5)';
+        ctx.fillRect(0, 0, width, height);
+        ctx.globalCompositeOperation = 'lighter';
 
-// Satellites
-const satellites = [];
-for (let i = 0; i < 5; i++) {
-satellites.push(new Satellite(350 + i * 40, 0.01 + i * 0.005, (i / 5) * Math.PI * 2));
-}
+        time += 0.015;
+        if (!isExploded) rotationAngle += 0.008;
 
-// Animation state
-let rotX = 0.3;
-let rotY = 0;
-let targetRotX = 0.3;
-let targetRotY = 0;
-let scale = 1;
-let targetScale = 1;
-let explosionActive = false;
-let explosionTimer = 0;
-let mouseX = canvas.width / 2;
-let mouseY = canvas.height / 2;
+        particles.sort(function(a, b) { return b.z - a.z; });
 
-// Mouse interaction
-canvas.addEventListener('mousemove', function(e) {
-mouseX = e.clientX;
-mouseY = e.clientY;
-targetRotY = (mouseX / canvas.width - 0.5) * Math.PI;
-targetRotX = (mouseY / canvas.height - 0.5) * Math.PI * 0.5 + 0.3;
-targetScale = 1.3;
-});
+        uiCoords.innerText = 'COORDS: X:' + mouse.x.toFixed(0) + ' Y:' + mouse.y.toFixed(0) + ' ROT:' + (rotationAngle % 6.28).toFixed(2);
 
-canvas.addEventListener('mouseleave', function() {
-targetScale = 1;
-});
+        ctx.strokeStyle = 'rgba(0, 255, 220, 0.2)';
+        ctx.lineWidth = 0.8;
+        
+        for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            if (p.update(time)) {
+                p.draw(ctx);
+                if (!isExploded && i < particles.length - 1) {
+                    const nextP = particles[i + 1];
+                    const dx = p.sx - nextP.sx; 
+                    const dy = p.sy - nextP.sy;
+                    if (dx * dx + dy * dy < config.connectionDist * config.connectionDist) {
+                        ctx.beginPath();
+                        ctx.moveTo(p.sx, p.sy); 
+                        ctx.lineTo(nextP.sx, nextP.sy);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
 
-canvas.addEventListener('click', function() {
-if (!explosionActive) {
-explosionActive = true;
-explosionTimer = Date.now();
-}
-});
+        satellites.forEach(function(s) { s.updateAndDraw(ctx); });
+        drawOverlay();
 
-// Animation loop
-function animate() {
-const time = Date.now();
-ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
-ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'source-over';
+        requestAnimationFrame(animate);
+    }
 
-// Smooth rotation & scale
-rotX += (targetRotX - rotX) * 0.05;
-rotY += (targetRotY - rotY) * 0.05;
-scale += (targetScale - scale) * 0.05;
+    function drawOverlay() {
+        if(isExploded) return;
+        const cx = width / 2; 
+        const cy = height / 2;
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.15)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); 
+        ctx.arc(cx, cy, 320, 0, Math.PI * 2); 
+        ctx.stroke();
+        
+        ctx.save();
+        ctx.translate(cx, cy); 
+        ctx.rotate(-rotationAngle * 1.2);
+        ctx.strokeStyle = 'rgba(255, 50, 150, 0.4)';
+        ctx.beginPath(); 
+        ctx.arc(0, 0, 240, 0, Math.PI * 0.7); 
+        ctx.stroke();
+        ctx.restore();
+    }
 
-// Auto-rotate
-rotY += 0.005;
+    initParticles();
+    animate();
 
-// Explosion timeout
-if (explosionActive && time - explosionTimer > 3000) {
-explosionActive = false;
-}
-
-// Mouse influence
-const mouseInfluence = {
-tilt: (mouseY / canvas.height - 0.5) * 30
-};
-
-// Update particles
-particles.forEach(function(p) {
-p.update(time, explosionActive, mouseInfluence);
-});
-
-// Sort by depth
-const rendered = particles.map(function(p) {
-return {
-particle: p,
-screen: p.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2)
-};
-}).sort(function(a, b) {
-return a.screen.scaleZ - b.screen.scaleZ;
-});
-
-// Draw connections
-ctx.strokeStyle = 'rgba(0, 255, 136, 0.08)';
-ctx.lineWidth = 0.5;
-for (let i = 0; i < rendered.length; i += 5) {
-for (let j = i + 1; j < Math.min(i + 4, rendered.length); j++) {
-const a = rendered[i].screen;
-const b = rendered[j].screen;
-const dist = Math.hypot(a.screenX - b.screenX, a.screenY - b.screenY);
-if (dist < 50) {
-ctx.beginPath();
-ctx.moveTo(a.screenX, a.screenY);
-ctx.lineTo(b.screenX, b.screenY);
-ctx.stroke();
-}
-}
-}
-
-// Draw satellites
-satellites.forEach(function(s) {
-s.update();
-s.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2);
-});
-
-// Overlay data
-overlay.innerHTML = 'SYSTEM: VUIM PARTICLE CORE<br>PARTICLES: ' + particles.length + '<br>ROTATION: X ' + (rotX * 57.3).toFixed(1) + '° Y ' + (rotY * 57.3).toFixed(1) + '°<br>SCALE: ' + scale.toFixed(2) + 'x<br>STATUS: ' + (explosionActive ? 'EXPLODED' : 'STABLE') + '<br>SATELLITES: ' + satellites.length + ' ACTIVE<br>MOUSE: [' + mouseX.toFixed(0) + ', ' + mouseY.toFixed(0) + ']';
-
-requestAnimationFrame(animate);
-}
-
-animate();
-
-// Resize handler
-window.addEventListener('resize', function() {
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-});
 </script>
 </body>
 </html>
