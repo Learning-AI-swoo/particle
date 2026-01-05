@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VUIM 2026 Text Particle System</title>
+<title>VUIM 2026 Cylindrical Text Particle System</title>
 <style>
 body {
 margin: 0;
@@ -54,8 +54,8 @@ canvas.height = window.innerHeight;
 function textToParticles(text, fontSize, spacing) {
 const tempCanvas = document.createElement('canvas');
 const tempCtx = tempCanvas.getContext('2d');
-tempCanvas.width = 800;
-tempCanvas.height = 200;
+tempCanvas.width = 600;
+tempCanvas.height = 100;
 tempCtx.font = `bold ${fontSize}px Arial`;
 tempCtx.fillStyle = 'white';
 tempCtx.textAlign = 'center';
@@ -71,8 +71,7 @@ const index = (y * tempCanvas.width + x) * 4;
 if (imageData.data[index + 3] > 128) {
 particles.push({
 x: x - tempCanvas.width / 2,
-y: y - tempCanvas.height / 2,
-z: 0
+y: y - tempCanvas.height / 2
 });
 }
 }
@@ -81,9 +80,38 @@ z: 0
 return particles;
 }
 
+// Map text particles to cylinder
+function mapToCylinder(textParticles, radius, height, repeats) {
+const cylinderParticles = [];
+const textWidth = 600;
+const circumference = 2 * Math.PI * radius;
+
+for (let repeat = 0; repeat < repeats; repeat++) {
+textParticles.forEach((p, index) => {
+const normalizedX = (p.x + textWidth / 2) / textWidth;
+const angle = normalizedX * Math.PI * 2 + (repeat * Math.PI * 2 / repeats);
+const yPos = (p.y / 100) * height + (repeat * height / repeats) - height / 2;
+
+const x = Math.cos(angle) * radius;
+const z = Math.sin(angle) * radius;
+const y = yPos;
+
+cylinderParticles.push({
+x, y, z,
+angle,
+repeat,
+originalIndex: index
+});
+}
+});
+}
+
+return cylinderParticles;
+}
+
 // Particle class
 class Particle {
-constructor(x, y, z, index, total) {
+constructor(x, y, z, index, total, angle) {
 this.baseX = x;
 this.baseY = y;
 this.baseZ = z;
@@ -92,13 +120,14 @@ this.y = y;
 this.z = z;
 this.index = index;
 this.total = total;
+this.angle = angle;
 this.vx = 0;
 this.vy = 0;
 this.vz = 0;
 this.exploded = false;
 this.returnSpeed = 0.05;
 this.waveOffset = (index / total) * Math.PI * 2;
-this.hue = (index / total) * 360;
+this.hue = (angle / (Math.PI * 2)) * 360;
 }
 
 update(time, explosionActive, mouseInfluence) {
@@ -135,10 +164,13 @@ this.z = this.baseZ;
 }
 
 // Wave motion
-const wave = Math.sin(time * 0.002 + this.waveOffset) * 15;
+const wave = Math.sin(time * 0.002 + this.waveOffset) * 10;
 if (!this.exploded) {
-this.z = this.baseZ + wave;
-this.y = this.baseY + mouseInfluence.tilt;
+const waveAngle = this.angle + wave * 0.01;
+const radius = Math.sqrt(this.baseX * this.baseX + this.baseZ * this.baseZ);
+this.x = Math.cos(waveAngle) * radius;
+this.z = Math.sin(waveAngle) * radius;
+this.y = this.baseY + mouseInfluence.tilt * 0.5;
 }
 }
 
@@ -169,19 +201,20 @@ const perspective = 800;
 const scaleZ = perspective / (perspective + z);
 const screenX = centerX + x * scale * scaleZ;
 const screenY = centerY + y * scale * scaleZ;
-const size = 2 + scaleZ * 2;
+const size = 1.5 + scaleZ * 1.5;
 
-// Rainbow color
-const alpha = scaleZ * 0.9;
-ctx.fillStyle = `hsla(${this.hue}, 80%, 60%, ${alpha})`;
+// Pastel rainbow color
+const alpha = scaleZ * 0.8;
+const lightness = 75; // Pastel tone
+ctx.fillStyle = `hsla(${this.hue}, 70%, ${lightness}%, ${alpha})`;
 ctx.beginPath();
 ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
 ctx.fill();
 
-// Glow effect
-ctx.fillStyle = `hsla(${this.hue}, 100%, 70%, ${alpha * 0.3})`;
+// Soft glow
+ctx.fillStyle = `hsla(${this.hue}, 90%, ${lightness + 10}%, ${alpha * 0.2})`;
 ctx.beginPath();
-ctx.arc(screenX, screenY, size * 2, 0, Math.PI * 2);
+ctx.arc(screenX, screenY, size * 2.5, 0, Math.PI * 2);
 ctx.fill();
 
 return { screenX, screenY, scaleZ, size };
@@ -226,31 +259,36 @@ const scaleZ = perspective / (perspective + z);
 const screenX = centerX + x * scale * scaleZ;
 const screenY = centerY + y * scale * scaleZ;
 
-ctx.fillStyle = `rgba(255, 100, 0, ${scaleZ * 0.7})`;
+ctx.fillStyle = `rgba(255, 180, 100, ${scaleZ * 0.6})`;
 ctx.beginPath();
-ctx.arc(screenX, screenY, 3 * scaleZ, 0, Math.PI * 2);
+ctx.arc(screenX, screenY, 2.5 * scaleZ, 0, Math.PI * 2);
 ctx.fill();
 
 return { screenX, screenY, scaleZ };
 }
 }
 
-// Generate text particles
-const textPositions = textToParticles("VUIM 2026", 120, 3);
-const particles = textPositions.map((pos, i) => 
-new Particle(pos.x, pos.y, pos.z, i, textPositions.length)
+// Generate cylindrical text particles
+const textParticles = textToParticles("VUIM 2026", 60, 2);
+const cylinderRadius = 180;
+const cylinderHeight = 400;
+const textRepeats = 8;
+const cylinderPositions = mapToCylinder(textParticles, cylinderRadius, cylinderHeight, textRepeats);
+
+const particles = cylinderPositions.map((pos, i) => 
+new Particle(pos.x, pos.y, pos.z, i, cylinderPositions.length, pos.angle)
 );
 
 // Satellites
 const satellites = [];
 for (let i = 0; i < 5; i++) {
-satellites.push(new Satellite(350 + i * 40, 0.01 + i * 0.005, (i / 5) * Math.PI * 2));
+satellites.push(new Satellite(350 + i * 40, 0.008 + i * 0.004, (i / 5) * Math.PI * 2));
 }
 
 // Animation state
-let rotX = 0.3;
+let rotX = 0.2;
 let rotY = 0;
-let targetRotX = 0.3;
+let targetRotX = 0.2;
 let targetRotY = 0;
 let scale = 1;
 let targetScale = 1;
@@ -263,9 +301,9 @@ let mouseY = canvas.height / 2;
 canvas.addEventListener('mousemove', (e) => {
 mouseX = e.clientX;
 mouseY = e.clientY;
-targetRotY = (mouseX / canvas.width - 0.5) * Math.PI;
-targetRotX = (mouseY / canvas.height - 0.5) * Math.PI * 0.5 + 0.3;
-targetScale = 1.3;
+targetRotY = (mouseX / canvas.width - 0.5) * Math.PI * 0.8;
+targetRotX = (mouseY / canvas.height - 0.5) * Math.PI * 0.4 + 0.2;
+targetScale = 1.25;
 });
 
 canvas.addEventListener('mouseleave', () => {
@@ -282,7 +320,7 @@ explosionTimer = Date.now();
 // Animation loop
 function animate() {
 const time = Date.now();
-ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
+ctx.fillStyle = 'rgba(10, 10, 15, 0.25)';
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 // Smooth rotation & scale
@@ -291,7 +329,7 @@ rotY += (targetRotY - rotY) * 0.05;
 scale += (targetScale - scale) * 0.05;
 
 // Auto-rotate
-rotY += 0.005;
+rotY += 0.004;
 
 // Explosion timeout
 if (explosionActive && time - explosionTimer > 3000) {
@@ -300,7 +338,7 @@ explosionActive = false;
 
 // Mouse influence
 const mouseInfluence = {
-tilt: (mouseY / canvas.height - 0.5) * 30
+tilt: (mouseY / canvas.height - 0.5) * 40
 };
 
 // Update particles
@@ -312,15 +350,15 @@ particle: p,
 screen: p.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2)
 })).sort((a, b) => a.screen.scaleZ - b.screen.scaleZ);
 
-// Draw connections
-ctx.strokeStyle = 'rgba(0, 255, 136, 0.08)';
+// Draw connections (sparse)
+ctx.strokeStyle = 'rgba(0, 255, 136, 0.05)';
 ctx.lineWidth = 0.5;
-for (let i = 0; i < rendered.length; i += 5) {
+for (let i = 0; i < rendered.length; i += 8) {
 for (let j = i + 1; j < Math.min(i + 4, rendered.length); j++) {
 const a = rendered[i].screen;
 const b = rendered[j].screen;
 const dist = Math.hypot(a.screenX - b.screenX, a.screenY - b.screenY);
-if (dist < 50) {
+if (dist < 40) {
 ctx.beginPath();
 ctx.moveTo(a.screenX, a.screenY);
 ctx.lineTo(b.screenX, b.screenY);
