@@ -56,7 +56,7 @@ const tempCanvas = document.createElement('canvas');
 const tempCtx = tempCanvas.getContext('2d');
 tempCanvas.width = 600;
 tempCanvas.height = 100;
-tempCtx.font = `bold ${fontSize}px Arial`;
+tempCtx.font = 'bold ' + fontSize + 'px Arial';
 tempCtx.fillStyle = 'white';
 tempCtx.textAlign = 'center';
 tempCtx.textBaseline = 'middle';
@@ -84,10 +84,9 @@ return particles;
 function mapToCylinder(textParticles, radius, height, repeats) {
 const cylinderParticles = [];
 const textWidth = 600;
-const circumference = 2 * Math.PI * radius;
 
 for (let repeat = 0; repeat < repeats; repeat++) {
-textParticles.forEach((p, index) => {
+textParticles.forEach(function(p, index) {
 const normalizedX = (p.x + textWidth / 2) / textWidth;
 const angle = normalizedX * Math.PI * 2 + (repeat * Math.PI * 2 / repeats);
 const yPos = (p.y / 100) * height + (repeat * height / repeats) - height / 2;
@@ -97,12 +96,13 @@ const z = Math.sin(angle) * radius;
 const y = yPos;
 
 cylinderParticles.push({
-x, y, z,
-angle,
-repeat,
+x: x,
+y: y,
+z: z,
+angle: angle,
+repeat: repeat,
 originalIndex: index
 });
-}
 });
 }
 
@@ -205,19 +205,19 @@ const size = 1.5 + scaleZ * 1.5;
 
 // Pastel rainbow color
 const alpha = scaleZ * 0.8;
-const lightness = 75; // Pastel tone
-ctx.fillStyle = `hsla(${this.hue}, 70%, ${lightness}%, ${alpha})`;
+const lightness = 75;
+ctx.fillStyle = 'hsla(' + this.hue + ', 70%, ' + lightness + '%, ' + alpha + ')';
 ctx.beginPath();
 ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
 ctx.fill();
 
 // Soft glow
-ctx.fillStyle = `hsla(${this.hue}, 90%, ${lightness + 10}%, ${alpha * 0.2})`;
+ctx.fillStyle = 'hsla(' + this.hue + ', 90%, ' + (lightness + 10) + '%, ' + (alpha * 0.2) + ')';
 ctx.beginPath();
 ctx.arc(screenX, screenY, size * 2.5, 0, Math.PI * 2);
 ctx.fill();
 
-return { screenX, screenY, scaleZ, size };
+return { screenX: screenX, screenY: screenY, scaleZ: scaleZ, size: size };
 }
 }
 
@@ -259,12 +259,12 @@ const scaleZ = perspective / (perspective + z);
 const screenX = centerX + x * scale * scaleZ;
 const screenY = centerY + y * scale * scaleZ;
 
-ctx.fillStyle = `rgba(255, 180, 100, ${scaleZ * 0.6})`;
+ctx.fillStyle = 'rgba(255, 180, 100, ' + (scaleZ * 0.6) + ')';
 ctx.beginPath();
 ctx.arc(screenX, screenY, 2.5 * scaleZ, 0, Math.PI * 2);
 ctx.fill();
 
-return { screenX, screenY, scaleZ };
+return { screenX: screenX, screenY: screenY, scaleZ: scaleZ };
 }
 }
 
@@ -275,9 +275,9 @@ const cylinderHeight = 400;
 const textRepeats = 8;
 const cylinderPositions = mapToCylinder(textParticles, cylinderRadius, cylinderHeight, textRepeats);
 
-const particles = cylinderPositions.map((pos, i) => 
-new Particle(pos.x, pos.y, pos.z, i, cylinderPositions.length, pos.angle)
-);
+const particles = cylinderPositions.map(function(pos, i) {
+return new Particle(pos.x, pos.y, pos.z, i, cylinderPositions.length, pos.angle);
+});
 
 // Satellites
 const satellites = [];
@@ -298,7 +298,7 @@ let mouseX = canvas.width / 2;
 let mouseY = canvas.height / 2;
 
 // Mouse interaction
-canvas.addEventListener('mousemove', (e) => {
+canvas.addEventListener('mousemove', function(e) {
 mouseX = e.clientX;
 mouseY = e.clientY;
 targetRotY = (mouseX / canvas.width - 0.5) * Math.PI * 0.8;
@@ -306,11 +306,11 @@ targetRotX = (mouseY / canvas.height - 0.5) * Math.PI * 0.4 + 0.2;
 targetScale = 1.25;
 });
 
-canvas.addEventListener('mouseleave', () => {
+canvas.addEventListener('mouseleave', function() {
 targetScale = 1;
 });
 
-canvas.addEventListener('click', () => {
+canvas.addEventListener('click', function() {
 if (!explosionActive) {
 explosionActive = true;
 explosionTimer = Date.now();
@@ -342,15 +342,21 @@ tilt: (mouseY / canvas.height - 0.5) * 40
 };
 
 // Update particles
-particles.forEach(p => p.update(time, explosionActive, mouseInfluence));
+particles.forEach(function(p) {
+p.update(time, explosionActive, mouseInfluence);
+});
 
 // Sort by depth
-const rendered = particles.map(p => ({
+const rendered = particles.map(function(p) {
+return {
 particle: p,
 screen: p.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2)
-})).sort((a, b) => a.screen.scaleZ - b.screen.scaleZ);
+};
+}).sort(function(a, b) {
+return a.screen.scaleZ - b.screen.scaleZ;
+});
 
-// Draw connections (sparse)
+// Draw connections
 ctx.strokeStyle = 'rgba(0, 255, 136, 0.05)';
 ctx.lineWidth = 0.5;
 for (let i = 0; i < rendered.length; i += 8) {
@@ -368,21 +374,13 @@ ctx.stroke();
 }
 
 // Draw satellites
-satellites.forEach(s => {
+satellites.forEach(function(s) {
 s.update();
 s.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2);
 });
 
 // Overlay data
-overlay.innerHTML = `
-SYSTEM: VUIM PARTICLE CORE<br>
-PARTICLES: ${particles.length}<br>
-ROTATION: X ${(rotX * 57.3).toFixed(1)}° Y ${(rotY * 57.3).toFixed(1)}°<br>
-SCALE: ${scale.toFixed(2)}x<br>
-STATUS: ${explosionActive ? 'EXPLODED' : 'STABLE'}<br>
-SATELLITES: ${satellites.length} ACTIVE<br>
-MOUSE: [${mouseX.toFixed(0)}, ${mouseY.toFixed(0)}]
-`;
+overlay.innerHTML = 'SYSTEM: VUIM PARTICLE CORE<br>PARTICLES: ' + particles.length + '<br>ROTATION: X ' + (rotX * 57.3).toFixed(1) + '° Y ' + (rotY * 57.3).toFixed(1) + '°<br>SCALE: ' + scale.toFixed(2) + 'x<br>STATUS: ' + (explosionActive ? 'EXPLODED' : 'STABLE') + '<br>SATELLITES: ' + satellites.length + ' ACTIVE<br>MOUSE: [' + mouseX.toFixed(0) + ', ' + mouseY.toFixed(0) + ']';
 
 requestAnimationFrame(animate);
 }
@@ -390,7 +388,7 @@ requestAnimationFrame(animate);
 animate();
 
 // Resize handler
-window.addEventListener('resize', () => {
+window.addEventListener('resize', function() {
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 });
