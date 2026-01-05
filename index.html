@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VUIM 2026 Cylindrical Particle System</title>
+<title>VUIM 2026 Text Particle System</title>
 <style>
 body {
 margin: 0;
@@ -50,12 +50,12 @@ const overlay = document.getElementById('overlay');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Text to particle converter with higher density
+// Text to particle converter
 function textToParticles(text, fontSize, spacing) {
 const tempCanvas = document.createElement('canvas');
 const tempCtx = tempCanvas.getContext('2d');
-tempCanvas.width = 1200;
-tempCanvas.height = 150;
+tempCanvas.width = 800;
+tempCanvas.height = 200;
 tempCtx.font = 'bold ' + fontSize + 'px Arial';
 tempCtx.fillStyle = 'white';
 tempCtx.textAlign = 'center';
@@ -70,55 +70,26 @@ for (let x = 0; x < tempCanvas.width; x += spacing) {
 const index = (y * tempCanvas.width + x) * 4;
 if (imageData.data[index + 3] > 128) {
 particles.push({
-x: x,
-y: y
+x: x - tempCanvas.width / 2,
+y: y - tempCanvas.height / 2,
+z: 0
 });
 }
 }
 }
 
-return { particles: particles, width: tempCanvas.width, height: tempCanvas.height };
-}
-
-// Map text to cylinder surface
-function mapTextToCylinder(textData, radius, repeats) {
-const cylinderParticles = [];
-const textWidth = textData.width;
-const textHeight = textData.height;
-const totalHeight = textHeight * repeats;
-
-textData.particles.forEach(function(p) {
-for (let r = 0; r < repeats; r++) {
-const angle = (p.x / textWidth) * Math.PI * 2;
-const yPos = (p.y + r * textHeight) - totalHeight / 2;
-const normalizedAngle = angle / (Math.PI * 2);
-const hue = normalizedAngle * 360;
-
-cylinderParticles.push({
-x: Math.cos(angle) * radius,
-y: yPos,
-z: Math.sin(angle) * radius,
-angle: angle,
-hue: hue,
-layer: r
-});
-}
-});
-
-return cylinderParticles;
+return particles;
 }
 
 // Particle class
 class Particle {
-constructor(x, y, z, angle, hue, index, total) {
+constructor(x, y, z, index, total) {
 this.baseX = x;
 this.baseY = y;
 this.baseZ = z;
 this.x = x;
 this.y = y;
 this.z = z;
-this.angle = angle;
-this.hue = hue;
 this.index = index;
 this.total = total;
 this.vx = 0;
@@ -127,6 +98,7 @@ this.vz = 0;
 this.exploded = false;
 this.returnSpeed = 0.05;
 this.waveOffset = (index / total) * Math.PI * 2;
+this.hue = (index / total) * 360;
 }
 
 update(time, explosionActive, mouseInfluence) {
@@ -160,14 +132,13 @@ this.y = this.baseY;
 this.z = this.baseZ;
 }
 }
-} else {
-// Wave motion along cylinder
-const wave = Math.sin(time * 0.002 + this.waveOffset) * 8;
-const waveAngle = this.angle + wave * 0.008;
-const radius = Math.sqrt(this.baseX * this.baseX + this.baseZ * this.baseZ);
-this.x = Math.cos(waveAngle) * radius;
-this.z = Math.sin(waveAngle) * radius;
-this.y = this.baseY + mouseInfluence.tilt * 0.3;
+}
+
+// Wave motion
+const wave = Math.sin(time * 0.002 + this.waveOffset) * 15;
+if (!this.exploded) {
+this.z = this.baseZ + wave;
+this.y = this.baseY + mouseInfluence.tilt;
 }
 }
 
@@ -194,26 +165,27 @@ y = tempY;
 z = tempZ;
 
 // Perspective
-const perspective = 1000;
+const perspective = 800;
 const scaleZ = perspective / (perspective + z);
 const screenX = centerX + x * scale * scaleZ;
 const screenY = centerY + y * scale * scaleZ;
-const size = 1.5 + scaleZ * 1.2;
+const size = 2 + scaleZ * 2;
 
-// Vibrant rainbow color
-const alpha = scaleZ * 0.85;
-ctx.fillStyle = 'hsla(' + this.hue + ', 90%, 55%, ' + alpha + ')';
+// Pastel rainbow color
+const alpha = scaleZ * 0.9;
+const lightness = 75;
+ctx.fillStyle = 'hsla(' + this.hue + ', 70%, ' + lightness + '%, ' + alpha + ')';
 ctx.beginPath();
 ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
 ctx.fill();
 
-// Glow
-ctx.fillStyle = 'hsla(' + this.hue + ', 95%, 65%, ' + (alpha * 0.3) + ')';
+// Glow effect
+ctx.fillStyle = 'hsla(' + this.hue + ', 85%, ' + (lightness + 5) + '%, ' + (alpha * 0.25) + ')';
 ctx.beginPath();
 ctx.arc(screenX, screenY, size * 2, 0, Math.PI * 2);
 ctx.fill();
 
-return { screenX: screenX, screenY: screenY, scaleZ: scaleZ };
+return { screenX: screenX, screenY: screenY, scaleZ: scaleZ, size: size };
 }
 }
 
@@ -223,7 +195,7 @@ constructor(radius, speed, offset) {
 this.radius = radius;
 this.speed = speed;
 this.angle = offset;
-this.orbitY = (Math.random() - 0.5) * 350;
+this.orbitY = (Math.random() - 0.5) * 300;
 }
 
 update() {
@@ -250,43 +222,39 @@ tempZ = y * sinX + z * cosX;
 y = tempY;
 z = tempZ;
 
-const perspective = 1000;
+const perspective = 800;
 const scaleZ = perspective / (perspective + z);
 const screenX = centerX + x * scale * scaleZ;
 const screenY = centerY + y * scale * scaleZ;
 
-ctx.fillStyle = 'rgba(255, 150, 80, ' + (scaleZ * 0.7) + ')';
+ctx.fillStyle = 'rgba(255, 180, 120, ' + (scaleZ * 0.6) + ')';
 ctx.beginPath();
-ctx.arc(screenX, screenY, 2.5 * scaleZ, 0, Math.PI * 2);
+ctx.arc(screenX, screenY, 3 * scaleZ, 0, Math.PI * 2);
 ctx.fill();
 
 return { screenX: screenX, screenY: screenY, scaleZ: scaleZ };
 }
 }
 
-// Generate particles
-const textData = textToParticles("VUIM 2026", 100, 2);
-const cylinderRadius = 200;
-const repeats = 6;
-const cylinderPositions = mapTextToCylinder(textData, cylinderRadius, repeats);
-
-const particles = cylinderPositions.map(function(pos, i) {
-return new Particle(pos.x, pos.y, pos.z, pos.angle, pos.hue, i, cylinderPositions.length);
+// Generate text particles
+const textPositions = textToParticles("VUIM 2026", 120, 3);
+const particles = textPositions.map(function(pos, i) {
+return new Particle(pos.x, pos.y, pos.z, i, textPositions.length);
 });
 
 // Satellites
 const satellites = [];
 for (let i = 0; i < 5; i++) {
-satellites.push(new Satellite(380 + i * 45, 0.008 + i * 0.004, (i / 5) * Math.PI * 2));
+satellites.push(new Satellite(350 + i * 40, 0.01 + i * 0.005, (i / 5) * Math.PI * 2));
 }
 
 // Animation state
-let rotX = 0.2;
+let rotX = 0.3;
 let rotY = 0;
-let targetRotX = 0.2;
+let targetRotX = 0.3;
 let targetRotY = 0;
-let scale = 0.9;
-let targetScale = 0.9;
+let scale = 1;
+let targetScale = 1;
 let explosionActive = false;
 let explosionTimer = 0;
 let mouseX = canvas.width / 2;
@@ -296,13 +264,13 @@ let mouseY = canvas.height / 2;
 canvas.addEventListener('mousemove', function(e) {
 mouseX = e.clientX;
 mouseY = e.clientY;
-targetRotY = (mouseX / canvas.width - 0.5) * Math.PI * 0.6;
-targetRotX = (mouseY / canvas.height - 0.5) * Math.PI * 0.3 + 0.2;
-targetScale = 1.1;
+targetRotY = (mouseX / canvas.width - 0.5) * Math.PI;
+targetRotX = (mouseY / canvas.height - 0.5) * Math.PI * 0.5 + 0.3;
+targetScale = 1.3;
 });
 
 canvas.addEventListener('mouseleave', function() {
-targetScale = 0.9;
+targetScale = 1;
 });
 
 canvas.addEventListener('click', function() {
@@ -315,28 +283,33 @@ explosionTimer = Date.now();
 // Animation loop
 function animate() {
 const time = Date.now();
-ctx.fillStyle = 'rgba(10, 10, 15, 0.25)';
+ctx.fillStyle = 'rgba(10, 10, 15, 0.2)';
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+// Smooth rotation & scale
 rotX += (targetRotX - rotX) * 0.05;
 rotY += (targetRotY - rotY) * 0.05;
 scale += (targetScale - scale) * 0.05;
 
 // Auto-rotate
-rotY += 0.003;
+rotY += 0.005;
 
+// Explosion timeout
 if (explosionActive && time - explosionTimer > 3000) {
 explosionActive = false;
 }
 
+// Mouse influence
 const mouseInfluence = {
-tilt: (mouseY / canvas.height - 0.5) * 50
+tilt: (mouseY / canvas.height - 0.5) * 30
 };
 
+// Update particles
 particles.forEach(function(p) {
 p.update(time, explosionActive, mouseInfluence);
 });
 
+// Sort by depth
 const rendered = particles.map(function(p) {
 return {
 particle: p,
@@ -346,15 +319,15 @@ screen: p.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2)
 return a.screen.scaleZ - b.screen.scaleZ;
 });
 
-// Connections
-ctx.strokeStyle = 'rgba(0, 255, 136, 0.04)';
+// Draw connections
+ctx.strokeStyle = 'rgba(0, 255, 136, 0.08)';
 ctx.lineWidth = 0.5;
-for (let i = 0; i < rendered.length; i += 10) {
-for (let j = i + 1; j < Math.min(i + 3, rendered.length); j++) {
+for (let i = 0; i < rendered.length; i += 5) {
+for (let j = i + 1; j < Math.min(i + 4, rendered.length); j++) {
 const a = rendered[i].screen;
 const b = rendered[j].screen;
 const dist = Math.hypot(a.screenX - b.screenX, a.screenY - b.screenY);
-if (dist < 35) {
+if (dist < 50) {
 ctx.beginPath();
 ctx.moveTo(a.screenX, a.screenY);
 ctx.lineTo(b.screenX, b.screenY);
@@ -363,11 +336,13 @@ ctx.stroke();
 }
 }
 
+// Draw satellites
 satellites.forEach(function(s) {
 s.update();
 s.draw(rotX, rotY, scale, canvas.width / 2, canvas.height / 2);
 });
 
+// Overlay data
 overlay.innerHTML = 'SYSTEM: VUIM PARTICLE CORE<br>PARTICLES: ' + particles.length + '<br>ROTATION: X ' + (rotX * 57.3).toFixed(1) + '° Y ' + (rotY * 57.3).toFixed(1) + '°<br>SCALE: ' + scale.toFixed(2) + 'x<br>STATUS: ' + (explosionActive ? 'EXPLODED' : 'STABLE') + '<br>SATELLITES: ' + satellites.length + ' ACTIVE<br>MOUSE: [' + mouseX.toFixed(0) + ', ' + mouseY.toFixed(0) + ']';
 
 requestAnimationFrame(animate);
@@ -375,6 +350,7 @@ requestAnimationFrame(animate);
 
 animate();
 
+// Resize handler
 window.addEventListener('resize', function() {
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
