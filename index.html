@@ -157,39 +157,52 @@
         }
 
         update(time) {
-            const wave = Math.sin(time * 2.5 + this.baseH * 0.08) * 8; 
-            const currentAngle = this.baseAngle + rotationAngle;
-            
-            let expansion = 0;
-            let tiltX = 0;
+    const wave = Math.sin(time * 2.5 + this.baseH * 0.08) * 8; 
+    const currentAngle = this.baseAngle + rotationAngle;
+    
+    let expansion = 0;
+    let tiltX = 0;
+    let repelX = 0;  // 추가
+    let repelY = 0;  // 추가
 
-            if (!isExploded && mouse.isActive) {
-                const dist = Math.sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
-                expansion = Math.max(0, (250 - dist) * 0.15);
-                tiltX = mouse.y * 0.0015 * this.baseH;
-            }
-
-            const r = config.radius + expansion;
-            const targetX = Math.cos(currentAngle) * r;
-            const targetZ = Math.sin(currentAngle) * r;
-            const targetY = this.baseH + wave + tiltX;
-
-            if (isExploded) {
-                this.x += this.vx; this.y += this.vy; this.z += this.vz;
-                this.vx *= 0.98; this.vy *= 0.98; this.vz *= 0.98;
-            } else {
-                this.x += (targetX - this.x) * config.returnSpeed;
-                this.y += (targetY - this.y) * config.returnSpeed;
-                this.z += (targetZ - this.z) * config.returnSpeed;
-            }
-
-            const scale = config.perspective / (config.perspective + this.z + 350);
-            this.sx = this.x * scale + width / 2;
-            this.sy = this.y * scale + height / 2;
-            this.scale = scale;
-
-            return scale > 0;
+    if (!isExploded && mouse.isActive) {
+        const dist = Math.sqrt(mouse.x * mouse.x + mouse.y * mouse.y);
+        expansion = Math.max(0, (250 - dist) * 0.15);
+        tiltX = mouse.y * 0.0015 * this.baseH;
+        
+        // 마우스 밀어내기 효과 추가
+        const dx = this.sx - (mouse.x + width / 2);
+        const dy = this.sy - (mouse.y + height / 2);
+        const mouseDist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (mouseDist < 150) {  // 마우스 반경 100px 이내 --> 150 으로 조정 
+            const force = (150 - mouseDist) / 150;
+            repelX = (dx / mouseDist) * force * 60;  // 밀어내는 힘 30 --> 60으로 조정 
+            repelY = (dy / mouseDist) * force * 60;
         }
+    }
+
+    const r = config.radius + expansion;
+    const targetX = Math.cos(currentAngle) * r + repelX;  // repelX 추가
+    const targetZ = Math.sin(currentAngle) * r;
+    const targetY = this.baseH + wave + tiltX + repelY;  // repelY 추가
+
+    if (isExploded) {
+        this.x += this.vx; this.y += this.vy; this.z += this.vz;
+        this.vx *= 0.98; this.vy *= 0.98; this.vz *= 0.98;
+    } else {
+        this.x += (targetX - this.x) * config.returnSpeed;
+        this.y += (targetY - this.y) * config.returnSpeed;
+        this.z += (targetZ - this.z) * config.returnSpeed;
+    }
+
+    const scale = config.perspective / (config.perspective + this.z + 350);
+    this.sx = this.x * scale + width / 2;
+    this.sy = this.y * scale + height / 2;
+    this.scale = scale;
+
+    return scale > 0;
+}
 
         draw(ctx) {
             ctx.fillStyle = this.color;
